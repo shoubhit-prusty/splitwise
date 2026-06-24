@@ -1,0 +1,133 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  phone        String?  @unique
+  passwordHash String
+  avatarColor  String   @default("#6366f1")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  groupMembers  GroupMember[]
+  paidExpenses  Expense[]      @relation("Payer")
+  expenseShares ExpenseShare[]
+  itemShares    ItemShare[]
+  sentDebts     Debt[]         @relation("Debtor")
+  receivedDebts Debt[]         @relation("Creditor")
+  settlements   Settlement[]
+}
+
+model Group {
+  id          String   @id @default(uuid())
+  name        String
+  icon        String   @default("🏠")
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members  GroupMember[]
+  expenses Expense[]
+  debts    Debt[]
+}
+
+model GroupMember {
+  id       String @id @default(uuid())
+  userId   String
+  groupId  String
+  role     String @default("member") // "admin" | "member"
+  dietType String @default("everything") // "veg" | "everything"
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  groupId     String
+  payerId     String
+  description String
+  totalAmount Decimal  @db.Decimal(10, 2)
+  subtotal    Decimal  @db.Decimal(10, 2) @default(0)
+  tax         Decimal  @db.Decimal(10, 2) @default(0)
+  tip         Decimal  @db.Decimal(10, 2) @default(0)
+  receiptUrl  String?
+  splitType   String   @default("equal") // "equal" | "itemized" | "custom"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group  Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payer  User           @relation("Payer", fields: [payerId], references: [id])
+  shares ExpenseShare[]
+  items  ExpenseItem[]
+}
+
+model ExpenseItem {
+  id        String  @id @default(uuid())
+  expenseId String
+  name      String
+  price     Decimal @db.Decimal(10, 2)
+  quantity  Int     @default(1)
+  isVeg     Boolean @default(true)
+
+  expense    Expense     @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  itemShares ItemShare[]
+}
+
+model ItemShare {
+  id     String @id @default(uuid())
+  itemId String
+  userId String
+
+  item ExpenseItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, userId])
+}
+
+model ExpenseShare {
+  id        String  @id @default(uuid())
+  expenseId String
+  userId    String
+  amount    Decimal @db.Decimal(10, 2)
+  settled   Boolean @default(false)
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseId, userId])
+}
+
+model Debt {
+  id         String  @id @default(uuid())
+  groupId    String
+  debtorId   String
+  creditorId String
+  amount     Decimal @db.Decimal(10, 2)
+  settled    Boolean @default(false)
+
+  group    Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  debtor   User  @relation("Debtor", fields: [debtorId], references: [id])
+  creditor User  @relation("Creditor", fields: [creditorId], references: [id])
+}
+
+model Settlement {
+  id         String   @id @default(uuid())
+  groupId    String
+  payerId    String
+  receiverId String
+  amount     Decimal  @db.Decimal(10, 2)
+  note       String?
+  createdAt  DateTime @default(now())
+
+  payer User @relation(fields: [payerId], references: [id])
+}

@@ -1,0 +1,21 @@
+{
+  "name": "splitwise",
+  "version": "1.0.0",
+  "description": "A full-featured expense splitting web application built to help groups manage shared expenses easily.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shoubhit-prusty/splitwise.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/shoubhit-prusty/splitwise/issues"
+  },
+  "homepage": "https://github.com/shoubhit-prusty/splitwise#readme"
+}
