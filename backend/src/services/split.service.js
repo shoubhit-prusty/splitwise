@@ -22,8 +22,11 @@ const calculateItemizedShares = (items, tax, tip, roundOff, memberIds, memberDie
     // If no explicit assignment, use diet filter
     if (!eligibleUsers.length) {
       eligibleUsers = item.isVeg
-        ? memberIds // All members can eat veg items
-        : memberIds.filter((uid) => memberDiets[uid] !== 'veg'); // Non-veg eaters only
+        ? memberIds // Veg items can be eaten by EVERYONE (veg, non-veg, everything)
+        : memberIds.filter((uid) => memberDiets[uid] === 'non-veg' || memberDiets[uid] === 'everything'); // Non-Veg items exclude 'veg' people
+        
+      // Fallback: if no one matches, split among everyone
+      if (!eligibleUsers.length) eligibleUsers = memberIds;
     }
 
     if (!eligibleUsers.length) continue;

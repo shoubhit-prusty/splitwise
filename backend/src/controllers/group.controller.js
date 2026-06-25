@@ -125,8 +125,8 @@ const addMember = async (req, res, next) => {
 const updateMemberDiet = async (req, res, next) => {
   try {
     const { dietType } = req.body;
-    if (!['veg', 'everything'].includes(dietType)) {
-      throw new AppError('Diet type must be "veg" or "everything".', 400);
+    if (!['veg', 'non-veg', 'everything'].includes(dietType)) {
+      throw new AppError('Diet type must be "veg", "non-veg", or "everything".', 400);
     }
 
     const member = await prisma.groupMember.update({

@@ -87,11 +87,13 @@ const confirmReceipt = async (req, res, next) => {
         });
 
         // Assign item shares
-        const assignedUsers = item.assignedUserIds?.length > 0
+        let assignedUsers = item.assignedUserIds?.length > 0
           ? item.assignedUserIds
           : item.isVeg
           ? memberIds
-          : memberIds.filter((uid) => memberDietsMap[uid] !== 'veg');
+          : memberIds.filter((uid) => memberDietsMap[uid] === 'non-veg' || memberDietsMap[uid] === 'everything');
+          
+        if (!assignedUsers.length) assignedUsers = memberIds;
 
         for (const uid of assignedUsers) {
           await tx.itemShare.create({ data: { itemId: expItem.id, userId: uid } });

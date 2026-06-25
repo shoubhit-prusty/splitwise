@@ -121,8 +121,8 @@ export default function GroupPage() {
     }
   };
 
-  const fetchGroup = async () => {
-    setLoading(true);
+  const fetchGroup = async (showLoader = false) => {
+    if (showLoader || !group) setLoading(true);
     try {
       const [groupRes, settleRes] = await Promise.all([
         api.get(`/groups/${id}`),
@@ -198,6 +198,20 @@ export default function GroupPage() {
       fetchGroup();
     } catch (err) { showToast(err.response?.data?.error || 'Failed to add member.'); }
     finally { setAdding(false); }
+  };
+
+  const handleToggleDiet = async (memberId, currentDiet) => {
+    try {
+      let newDiet = 'everything';
+      if (currentDiet === 'everything') newDiet = 'veg';
+      else if (currentDiet === 'veg') newDiet = 'non-veg';
+      else if (currentDiet === 'non-veg') newDiet = 'everything';
+      
+      await api.patch(`/groups/${id}/members/${memberId}/diet`, { dietType: newDiet });
+      fetchGroup();
+    } catch (err) {
+      showToast(err.response?.data?.error || 'Failed to update diet.');
+    }
   };
 
   const handleDeleteExpense = async () => {
@@ -921,14 +935,20 @@ export default function GroupPage() {
                       );
                     }
                   })()}
-                  <span style={{
-                    padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
-                    background: m.dietType === 'veg' ? 'rgba(34,197,94,0.1)' : 'rgba(249,115,22,0.1)',
-                    color: m.dietType === 'veg' ? '#4ade80' : '#fb923c',
-                    border: `1px solid ${m.dietType === 'veg' ? 'rgba(34,197,94,0.2)' : 'rgba(249,115,22,0.2)'}`,
-                  }}>
-                    {m.dietType === 'veg' ? '🟢 Vegetarian' : '🍖 Everything'}
-                  </span>
+                  <button 
+                    onClick={() => handleToggleDiet(m.userId, m.dietType)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                      background: m.dietType === 'veg' ? 'rgba(34,197,94,0.1)' : m.dietType === 'non-veg' ? 'rgba(244,63,94,0.1)' : 'rgba(249,115,22,0.1)',
+                      color: m.dietType === 'veg' ? '#4ade80' : m.dietType === 'non-veg' ? '#f43f5e' : '#fb923c',
+                      border: `1px solid ${m.dietType === 'veg' ? 'rgba(34,197,94,0.2)' : m.dietType === 'non-veg' ? 'rgba(244,63,94,0.2)' : 'rgba(249,115,22,0.2)'}`,
+                      cursor: 'pointer', transition: 'transform 0.1s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                    onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    {m.dietType === 'veg' ? '🟢 Vegetarian' : m.dietType === 'non-veg' ? '🥩 Non-Veg Only' : '🍖 Everything'}
+                  </button>
                 </div>
               </div>
             ))}

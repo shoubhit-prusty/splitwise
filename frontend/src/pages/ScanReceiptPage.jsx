@@ -108,6 +108,7 @@ export default function ScanReceiptPage() {
   const inputStyle = {
     background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
     color: '#f8fafc', padding: '12px 16px', borderRadius: 12, fontSize: 14, outline: 'none', transition: 'all 0.2s',
+    minWidth: 0,
   };
 
   return (
@@ -218,7 +219,20 @@ export default function ScanReceiptPage() {
                       <input value={item.name} onChange={(e) => updateItem(item.id, 'name', e.target.value)} style={{ ...inputStyle, flex: 2, padding: '10px 14px' }} placeholder="Item name" />
                       <input value={item.price} type="number" min="0" onChange={(e) => updateItem(item.id, 'price', e.target.value)} style={{ ...inputStyle, flex: 1, padding: '10px 14px', textAlign: 'right' }} />
                       <input value={item.quantity} type="number" min="1" onChange={(e) => updateItem(item.id, 'quantity', e.target.value)} style={{ ...inputStyle, flex: 0.5, padding: '10px 14px', textAlign: 'center' }} />
-                      <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: '#f43f5e', fontSize: 20, cursor: 'pointer', padding: '10px', opacity: 0.7 }} onMouseEnter={e => e.target.style.opacity=1} onMouseLeave={e => e.target.style.opacity=0.7}>×</button>
+                      <button 
+                        onClick={() => updateItem(item.id, 'isVeg', !item.isVeg)} 
+                        style={{ 
+                          background: item.isVeg ? 'rgba(34,197,94,0.1)' : 'rgba(244,63,94,0.1)', 
+                          border: `1px solid ${item.isVeg ? 'rgba(34,197,94,0.3)' : 'rgba(244,63,94,0.3)'}`, 
+                          color: item.isVeg ? '#4ade80' : '#f43f5e', 
+                          fontSize: 12, fontWeight: 700, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap', flexShrink: 0
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                        onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                      >
+                        {item.isVeg ? '🟢 Veg' : '🥩 Non-Veg'}
+                      </button>
+                      <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: '#f43f5e', fontSize: 20, cursor: 'pointer', padding: '10px', opacity: 0.7, flexShrink: 0 }} onMouseEnter={e => e.target.style.opacity=1} onMouseLeave={e => e.target.style.opacity=0.7}>×</button>
                     </div>
                     
                     {/* Assignees */}
@@ -239,8 +253,12 @@ export default function ScanReceiptPage() {
                           );
                         })}
                       </div>
-                      <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>
-                        {!item.assignedUserIds || item.assignedUserIds.length === 0 ? 'Splitting among everyone' : `Split among ${item.assignedUserIds.length}`}
+                      <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto', textAlign: 'right' }}>
+                        {item.assignedUserIds?.length > 0 
+                          ? `Split among ${item.assignedUserIds.length}`
+                          : item.isVeg 
+                            ? 'Splitting among everyone (Veg)' 
+                            : 'Splitting among non-vegetarians'}
                       </span>
                     </div>
                   </div>
