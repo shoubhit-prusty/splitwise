@@ -8,7 +8,7 @@ const getProfile = async (req, res, next) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      select: { id: true, name: true, email: true, phone: true, avatarColor: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, avatarColor: true, upiId: true, createdAt: true },
     });
     if (!user) throw new AppError('User not found.', 404);
     res.json({ user });
@@ -66,4 +66,28 @@ const getUserById = async (req, res, next) => {
   }
 };
 
-module.exports = { getProfile, searchUsers, getUserById };
+/**
+ * PUT /api/users/profile
+ */
+const updateProfile = async (req, res, next) => {
+  try {
+    const { upiId } = req.body;
+    
+    // Simple validation: Ensure it looks roughly like a UPI ID if provided
+    if (upiId && !upiId.includes('@')) {
+      throw new AppError('Invalid UPI ID format. It should look like name@bank.', 400);
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { upiId: upiId || null },
+      select: { id: true, name: true, email: true, phone: true, avatarColor: true, upiId: true, createdAt: true },
+    });
+
+    res.json({ message: 'Profile updated successfully', user });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getProfile, searchUsers, getUserById, updateProfile };

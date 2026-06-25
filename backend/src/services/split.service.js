@@ -6,11 +6,12 @@ const Decimal = require('decimal.js');
  * @param {Array} items - [{ id, price, quantity, isVeg, assignedUserIds: [] }]
  * @param {number} tax - Tax amount in ₹
  * @param {number} tip - Tip amount in ₹
+ * @param {number} roundOff - Round off difference in ₹
  * @param {Array} memberIds - All member IDs in the group
  * @param {Object} memberDiets - { userId: 'veg' | 'everything' }
  * @returns {Object} { userId: totalShare }
  */
-const calculateItemizedShares = (items, tax, tip, memberIds, memberDiets) => {
+const calculateItemizedShares = (items, tax, tip, roundOff, memberIds, memberDiets) => {
   const userSubtotals = {};
   memberIds.forEach((uid) => (userSubtotals[uid] = new Decimal(0)));
 
@@ -45,9 +46,10 @@ const calculateItemizedShares = (items, tax, tip, memberIds, memberDiets) => {
     return Object.fromEntries(memberIds.map((uid) => [uid, 0]));
   }
 
-  // Proportionally distribute tax and tip
+  // Proportionally distribute tax, tip, and roundOff
   const taxAmount = new Decimal(tax || 0);
   const tipAmount = new Decimal(tip || 0);
+  const roundOffAmount = new Decimal(roundOff || 0);
 
   const finalShares = {};
   for (const uid of memberIds) {
@@ -55,7 +57,8 @@ const calculateItemizedShares = (items, tax, tip, memberIds, memberDiets) => {
     const proportion = subtotal.dividedBy(totalSubtotal);
     const taxShare = taxAmount.times(proportion);
     const tipShare = tipAmount.times(proportion);
-    finalShares[uid] = parseFloat(subtotal.plus(taxShare).plus(tipShare).toFixed(2));
+    const roundOffShare = roundOffAmount.times(proportion);
+    finalShares[uid] = parseFloat(subtotal.plus(taxShare).plus(tipShare).plus(roundOffShare).toFixed(2));
   }
 
   return finalShares;

@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../api/axiosInstance';
+import Avatar from '../components/Avatar';
 
 export default function ScanReceiptPage() {
   const { id: groupId } = useParams();
@@ -16,6 +17,15 @@ export default function ScanReceiptPage() {
   const [tip, setTip] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [members, setMembers] = useState([]);
+  const [enableRoundOff, setEnableRoundOff] = useState(true);
+
+  useEffect(() => {
+    // Fetch group members so we can assign them to items
+    api.get(`/groups/${groupId}`)
+      .then(res => setMembers(res.data.group.members.map(m => m.user)))
+      .catch(err => console.error("Failed to load members", err));
+  }, [groupId]);
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -29,6 +39,8 @@ export default function ScanReceiptPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setItems(data.items.map((item, i) => ({ ...item, id: i, assignedUserIds: [] })));
+      if (data.tax) setTax(data.tax);
+      if (data.tip) setTip(data.tip);
       setReceiptUrl(data.receiptUrl);
       setStep('review');
     } catch (err) {
@@ -49,6 +61,18 @@ export default function ScanReceiptPage() {
     setItems((prev) => prev.map((item) => item.id === id ? { ...item, [field]: value } : item));
   };
 
+  const toggleAssignee = (itemId, userId) => {
+    setItems((prev) => prev.map((item) => {
+      if (item.id !== itemId) return item;
+      const assigned = item.assignedUserIds || [];
+      if (assigned.includes(userId)) {
+        return { ...item, assignedUserIds: assigned.filter(id => id !== userId) };
+      } else {
+        return { ...item, assignedUserIds: [...assigned, userId] };
+      }
+    }));
+  };
+
   const removeItem = (id) => setItems((prev) => prev.filter((item) => item.id !== id));
 
   const addItem = () => {
@@ -57,7 +81,9 @@ export default function ScanReceiptPage() {
   };
 
   const subtotal = items.reduce((s, i) => s + (parseFloat(i.price) || 0) * (parseInt(i.quantity) || 1), 0);
-  const total = subtotal + (parseFloat(tax) || 0) + (parseFloat(tip) || 0);
+  const exactTotal = subtotal + (parseFloat(tax) || 0) + (parseFloat(tip) || 0);
+  const total = enableRoundOff ? Math.round(exactTotal) : exactTotal;
+  const roundOff = enableRoundOff ? total - exactTotal : 0;
 
   const handleConfirm = async () => {
     setSaving(true);
@@ -69,6 +95,7 @@ export default function ScanReceiptPage() {
         items,
         tax: parseFloat(tax) || 0,
         tip: parseFloat(tip) || 0,
+        roundOff: parseFloat(roundOff.toFixed(2)),
         receiptUrl,
       });
       navigate(`/groups/${groupId}`);
@@ -79,73 +106,83 @@ export default function ScanReceiptPage() {
   };
 
   const inputStyle = {
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid var(--color-border)',
-    color: 'var(--color-text)',
+    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+    color: '#f8fafc', padding: '12px 16px', borderRadius: 12, fontSize: 14, outline: 'none', transition: 'all 0.2s',
   };
 
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-bg)' }}>
+    <div style={{ minHeight: '100vh', background: '#060612', color: '#e2e8f0', fontFamily: "'Inter', sans-serif" }}>
+      {/* Background glow */}
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
+        background: 'radial-gradient(ellipse 50% 40% at 20% 20%, rgba(99,102,241,0.08) 0%, transparent 60%), radial-gradient(ellipse 40% 30% at 80% 80%, rgba(236,72,153,0.06) 0%, transparent 60%)',
+      }} />
+
       {/* Header */}
-      <div className="sticky top-0 z-40 px-6 py-4"
-        style={{ background: 'rgba(15,15,26,0.9)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--color-border)' }}>
-        <div className="max-w-3xl mx-auto flex items-center gap-4">
-          <Link to={`/groups/${groupId}`} style={{ color: 'var(--color-text-muted)' }}>← Back</Link>
-          <h1 className="font-bold text-lg" style={{ color: 'var(--color-text)' }}>📷 Scan Receipt</h1>
+      <div style={{
+        position: 'sticky', top: 0, zIndex: 40, padding: '20px 32px',
+        background: 'rgba(6, 6, 18, 0.8)', backdropFilter: 'blur(16px)',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+      }}>
+        <div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 20 }}>
+          <Link to={`/groups/${groupId}`} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            width: 40, height: 40, borderRadius: 12, background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.08)', color: '#94a3b8', textDecoration: 'none',
+            fontSize: 20, transition: 'all 0.2s',
+          }} onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = '#fff'; }}
+             onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = '#94a3b8'; }}>
+            ←
+          </Link>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#fff', margin: 0 }}>📷 Scan Receipt</h1>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 py-8">
+      <div style={{ maxWidth: 800, margin: '0 auto', padding: '32px 32px', position: 'relative', zIndex: 1 }}>
         {error && (
-          <div className="mb-6 p-4 rounded-xl text-sm"
-            style={{ background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.3)', color: '#f43f5e' }}>
-            {error}
+          <div style={{ padding: '16px', borderRadius: 16, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', color: '#fca5a5', marginBottom: 24, fontSize: 14 }}>
+            ⚠️ {error}
           </div>
         )}
 
         {/* STEP 1: Upload */}
         {step === 'upload' && (
-          <div className="animate-fade-in-up">
+          <div style={{ animation: 'fadeUp 0.3s ease' }}>
             <div
               onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onDrop={onDrop}
-              className="relative rounded-2xl p-12 text-center transition-all cursor-pointer"
+              onClick={() => document.getElementById('receipt-file-input').click()}
               style={{
-                border: `2px dashed ${dragging ? '#6366f1' : 'var(--color-border)'}`,
+                padding: '64px 32px', borderRadius: 24, textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s',
+                border: `2px dashed ${dragging ? '#6366f1' : 'rgba(255,255,255,0.1)'}`,
                 background: dragging ? 'rgba(99,102,241,0.05)' : 'rgba(255,255,255,0.02)',
-              }}
-              onClick={() => document.getElementById('receipt-file-input').click()}>
-              <input id="receipt-file-input" type="file" accept="image/*" className="hidden"
-                onChange={(e) => handleFile(e.target.files[0])} />
+              }}>
+              <input id="receipt-file-input" type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => handleFile(e.target.files[0])} />
 
               {uploading ? (
-                <>
-                  <div className="w-12 h-12 rounded-full border-2 border-transparent mx-auto mb-4"
-                    style={{ borderTopColor: '#6366f1', animation: 'spin 1s linear infinite' }} />
-                  <p className="font-medium" style={{ color: 'var(--color-text)' }}>Processing receipt with OCR...</p>
-                  <p className="text-sm mt-1" style={{ color: 'var(--color-text-muted)' }}>This may take a few seconds</p>
-                </>
+                <div>
+                  <div style={{ width: 48, height: 48, border: '3px solid rgba(99,102,241,0.2)', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+                  <p style={{ fontSize: 18, fontWeight: 600, color: '#f8fafc', margin: '0 0 8px' }}>Scanning with AI...</p>
+                  <p style={{ fontSize: 14, color: '#64748b', margin: 0 }}>Extracting items and prices</p>
+                </div>
               ) : (
-                <>
-                  <div className="text-5xl mb-4">🧾</div>
-                  <p className="font-semibold text-lg mb-2" style={{ color: 'var(--color-text)' }}>
+                <div>
+                  <div style={{ fontSize: 64, marginBottom: 16 }}>🧾</div>
+                  <p style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc', margin: '0 0 8px' }}>
                     {dragging ? 'Drop it here!' : 'Upload a receipt'}
                   </p>
-                  <p className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                    Drag & drop or click to browse · JPEG, PNG, WebP · Max 10MB
-                  </p>
-                  <div className="mt-6 inline-flex items-center gap-2 px-6 py-3 rounded-xl font-medium text-white"
-                    style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 4px 15px rgba(99,102,241,0.3)' }}>
-                    Choose image
-                  </div>
-                </>
+                  <p style={{ fontSize: 14, color: '#64748b', margin: '0 0 24px' }}>Drag & drop or click to browse · JPEG, PNG, WebP</p>
+                  <div style={{
+                    display: 'inline-flex', padding: '12px 24px', borderRadius: 12, fontWeight: 600, color: '#fff',
+                    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 8px 24px rgba(99,102,241,0.3)',
+                  }}>Choose image</div>
+                </div>
               )}
             </div>
-
             {preview && !uploading && (
-              <div className="mt-4 glass rounded-xl p-3">
-                <img src={preview} alt="Receipt preview" className="w-full max-h-64 object-contain rounded-lg" />
+              <div style={{ marginTop: 24, padding: 16, borderRadius: 20, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <img src={preview} alt="Preview" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 12 }} />
               </div>
             )}
           </div>
@@ -153,137 +190,118 @@ export default function ScanReceiptPage() {
 
         {/* STEP 2: Review */}
         {step === 'review' && (
-          <div className="animate-fade-in-up space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold" style={{ color: 'var(--color-text)' }}>
-                Review & Edit Items
-              </h2>
-              <button onClick={() => setStep('upload')} className="text-sm"
-                style={{ color: 'var(--color-text-muted)' }}>
-                ← Re-upload
-              </button>
+          <div style={{ animation: 'fadeUp 0.3s ease', display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h2 style={{ fontSize: 20, fontWeight: 700, color: '#f8fafc', margin: 0 }}>Review & Assign Items</h2>
+              <button onClick={() => setStep('upload')} style={{ background: 'none', border: 'none', color: '#818cf8', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>← Re-upload</button>
             </div>
 
-            {/* Description */}
             <div>
-              <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-muted)' }}>
-                Expense description
-              </label>
-              <input value={description} onChange={(e) => setDescription(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl text-sm outline-none"
-                style={inputStyle}
-                onFocus={(e) => (e.target.style.borderColor = '#6366f1')}
-                onBlur={(e) => (e.target.style.borderColor = 'var(--color-border)')} />
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#94a3b8', marginBottom: 8 }}>Expense Title</label>
+              <input value={description} onChange={(e) => setDescription(e.target.value)} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+                onFocus={(e) => { e.target.style.borderColor = 'rgba(99,102,241,0.5)'; e.target.style.background = 'rgba(99,102,241,0.03)'; }}
+                onBlur={(e) => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.background = 'rgba(255,255,255,0.03)'; }} />
             </div>
 
-            {/* Items table */}
-            <div className="glass rounded-xl overflow-hidden">
-              <div className="grid text-xs font-medium uppercase tracking-wider px-4 py-3"
-                style={{ color: 'var(--color-text-muted)', gridTemplateColumns: '1fr 80px 70px 80px 32px', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--color-border)' }}>
-                <span>Item name</span>
-                <span className="text-right">Price</span>
-                <span className="text-right">Qty</span>
-                <span className="text-center">Diet</span>
-                <span />
+            <div style={{ borderRadius: 20, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', padding: '12px 20px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <div style={{ flex: 2 }}>Item</div>
+                <div style={{ flex: 1, textAlign: 'right' }}>Price</div>
+                <div style={{ flex: 0.5, textAlign: 'center' }}>Qty</div>
+                <div style={{ width: 40 }}></div>
               </div>
 
-              <div className="divide-y" style={{ borderColor: 'var(--color-border)' }}>
+              <div>
                 {items.map((item) => (
-                  <div key={item.id} className="grid items-center px-4 py-3 gap-2"
-                    style={{ gridTemplateColumns: '1fr 80px 70px 80px 32px' }}>
-                    <input value={item.name}
-                      onChange={(e) => updateItem(item.id, 'name', e.target.value)}
-                      className="px-2 py-1.5 rounded-lg text-sm outline-none w-full"
-                      style={inputStyle}
-                      placeholder="Item name" />
-                    <input value={item.price} type="number" min="0"
-                      onChange={(e) => updateItem(item.id, 'price', e.target.value)}
-                      className="px-2 py-1.5 rounded-lg text-sm outline-none text-right w-full"
-                      style={inputStyle} />
-                    <input value={item.quantity} type="number" min="1"
-                      onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                      className="px-2 py-1.5 rounded-lg text-sm outline-none text-right w-full"
-                      style={inputStyle} />
-                    <button onClick={() => updateItem(item.id, 'isVeg', !item.isVeg)}
-                      className="w-full py-1.5 rounded-lg text-sm font-medium transition-all"
-                      style={{
-                        background: item.isVeg ? 'rgba(34,197,94,0.15)' : 'rgba(249,115,22,0.15)',
-                        border: `1px solid ${item.isVeg ? 'rgba(34,197,94,0.4)' : 'rgba(249,115,22,0.4)'}`,
-                        color: item.isVeg ? '#22c55e' : '#f97316',
-                      }}>
-                      {item.isVeg ? '🟢' : '🔴'}
-                    </button>
-                    <button onClick={() => removeItem(item.id)} className="text-center opacity-40 hover:opacity-100 transition-opacity"
-                      style={{ color: '#f43f5e', fontSize: 18 }}>×</button>
+                  <div key={item.id} style={{ padding: '20px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                      <input value={item.name} onChange={(e) => updateItem(item.id, 'name', e.target.value)} style={{ ...inputStyle, flex: 2, padding: '10px 14px' }} placeholder="Item name" />
+                      <input value={item.price} type="number" min="0" onChange={(e) => updateItem(item.id, 'price', e.target.value)} style={{ ...inputStyle, flex: 1, padding: '10px 14px', textAlign: 'right' }} />
+                      <input value={item.quantity} type="number" min="1" onChange={(e) => updateItem(item.id, 'quantity', e.target.value)} style={{ ...inputStyle, flex: 0.5, padding: '10px 14px', textAlign: 'center' }} />
+                      <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: '#f43f5e', fontSize: 20, cursor: 'pointer', padding: '10px', opacity: 0.7 }} onMouseEnter={e => e.target.style.opacity=1} onMouseLeave={e => e.target.style.opacity=0.7}>×</button>
+                    </div>
+                    
+                    {/* Assignees */}
+                    <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500 }}>Who ate this?</span>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {members.map(member => {
+                          const isAssigned = (item.assignedUserIds || []).includes(member.id);
+                          return (
+                            <div key={member.id} onClick={() => toggleAssignee(item.id, member.id)} style={{
+                              display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px 4px 4px', borderRadius: 20, cursor: 'pointer', transition: 'all 0.2s',
+                              background: isAssigned ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)',
+                              border: `1px solid ${isAssigned ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.08)'}`,
+                            }}>
+                              <Avatar name={member.name} color={member.avatarColor} size={20} />
+                              <span style={{ fontSize: 11, fontWeight: 500, color: isAssigned ? '#a5b4fc' : '#64748b' }}>{member.name.split(' ')[0]}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <span style={{ fontSize: 11, color: '#64748b', marginLeft: 'auto' }}>
+                        {!item.assignedUserIds || item.assignedUserIds.length === 0 ? 'Splitting among everyone' : `Split among ${item.assignedUserIds.length}`}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
 
-              <button onClick={addItem}
-                className="w-full py-3 text-sm font-medium transition-all"
-                style={{ color: '#6366f1', borderTop: '1px solid var(--color-border)', background: 'transparent' }}
-                onMouseEnter={(e) => (e.target.style.background = 'rgba(99,102,241,0.05)')}
-                onMouseLeave={(e) => (e.target.style.background = 'transparent')}>
-                + Add item
+              <button onClick={addItem} style={{
+                width: '100%', padding: '16px', background: 'transparent', border: 'none',
+                color: '#818cf8', fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
+              }} onMouseEnter={e => e.target.style.background = 'rgba(99,102,241,0.05)'} onMouseLeave={e => e.target.style.background = 'transparent'}>
+                + Add manual item
               </button>
             </div>
 
-            {/* Tax & Tip */}
-            <div className="grid grid-cols-2 gap-4">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
               <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-muted)' }}>Tax (₹)</label>
-                <input id="tax-input" type="number" min="0" value={tax}
-                  onChange={(e) => setTax(e.target.value)} placeholder="0"
-                  className="w-full px-4 py-3 rounded-xl text-sm outline-none"
-                  style={inputStyle}
-                  onFocus={(e) => (e.target.style.borderColor = '#6366f1')}
-                  onBlur={(e) => (e.target.style.borderColor = 'var(--color-border)')} />
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#94a3b8', marginBottom: 8 }}>Tax (₹)</label>
+                <input type="number" min="0" value={tax} onChange={(e) => setTax(e.target.value)} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} placeholder="0" />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2" style={{ color: 'var(--color-text-muted)' }}>Tip (₹)</label>
-                <input id="tip-input" type="number" min="0" value={tip}
-                  onChange={(e) => setTip(e.target.value)} placeholder="0"
-                  className="w-full px-4 py-3 rounded-xl text-sm outline-none"
-                  style={inputStyle}
-                  onFocus={(e) => (e.target.style.borderColor = '#6366f1')}
-                  onBlur={(e) => (e.target.style.borderColor = 'var(--color-border)')} />
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#94a3b8', marginBottom: 8 }}>Tip (₹)</label>
+                <input type="number" min="0" value={tip} onChange={(e) => setTip(e.target.value)} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} placeholder="0" />
               </div>
             </div>
 
-            {/* Total summary */}
-            <div className="glass rounded-xl p-4 space-y-2">
-              <div className="flex justify-between text-sm" style={{ color: 'var(--color-text-muted)' }}>
+            <div style={{ padding: '24px', borderRadius: 20, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: 14, marginBottom: 8 }}>
                 <span>Subtotal</span><span>₹{subtotal.toFixed(2)}</span>
               </div>
-              {parseFloat(tax) > 0 && (
-                <div className="flex justify-between text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                  <span>Tax</span><span>₹{parseFloat(tax).toFixed(2)}</span>
-                </div>
-              )}
-              {parseFloat(tip) > 0 && (
-                <div className="flex justify-between text-sm" style={{ color: 'var(--color-text-muted)' }}>
-                  <span>Tip</span><span>₹{parseFloat(tip).toFixed(2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between font-bold pt-2" style={{ borderTop: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+              {parseFloat(tax) > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: 14, marginBottom: 8 }}><span>Tax</span><span>₹{parseFloat(tax).toFixed(2)}</span></div>}
+              {parseFloat(tip) > 0 && <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: 14, marginBottom: 8 }}><span>Tip</span><span>₹{parseFloat(tip).toFixed(2)}</span></div>}
+              
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: '#94a3b8', fontSize: 14, marginBottom: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={enableRoundOff} onChange={(e) => setEnableRoundOff(e.target.checked)} style={{ accentColor: '#6366f1' }} />
+                  Round off bill
+                </label>
+                {enableRoundOff && <span>{roundOff > 0 ? '+' : ''}₹{roundOff.toFixed(2)}</span>}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#f8fafc', fontSize: 20, fontWeight: 800, marginTop: 16, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
                 <span>Total</span><span>₹{total.toFixed(2)}</span>
               </div>
             </div>
 
-            <button id="confirm-receipt-btn" onClick={handleConfirm} disabled={saving || items.length === 0}
-              className="w-full py-4 rounded-xl font-semibold text-white text-lg transition-all"
-              style={{
-                background: saving || items.length === 0 ? 'rgba(99,102,241,0.4)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                boxShadow: saving || items.length === 0 ? 'none' : '0 4px 25px rgba(99,102,241,0.5)',
-                cursor: saving || items.length === 0 ? 'not-allowed' : 'pointer',
-              }}>
-              {saving ? 'Saving expense...' : `✓ Confirm & Split ₹${total.toFixed(0)}`}
+            <button onClick={handleConfirm} disabled={saving || items.length === 0} style={{
+              width: '100%', padding: '18px', borderRadius: 16, border: 'none',
+              background: saving || items.length === 0 ? 'rgba(99,102,241,0.3)' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+              color: '#fff', fontSize: 16, fontWeight: 700, cursor: saving || items.length === 0 ? 'not-allowed' : 'pointer',
+              boxShadow: saving || items.length === 0 ? 'none' : '0 8px 32px rgba(99,102,241,0.4)', transition: 'all 0.2s'
+            }}>
+              {saving ? 'Saving expense...' : `✓ Split ₹${total.toFixed(0)} Now`}
             </button>
           </div>
         )}
       </div>
 
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      `}</style>
     </div>
   );
 }

@@ -72,6 +72,12 @@ const getGroupById = async (req, res, next) => {
           },
           orderBy: { createdAt: 'desc' },
         },
+        subscriptions: {
+          include: {
+            payer: { select: { id: true, name: true, avatarColor: true } },
+            shares: { include: { user: { select: { id: true, name: true } } } },
+          },
+        },
       },
     });
 
@@ -134,4 +140,34 @@ const updateMemberDiet = async (req, res, next) => {
   }
 };
 
-module.exports = { createGroup, getGroups, getGroupById, addMember, updateMemberDiet };
+/**
+ * DELETE /api/groups/:id — Delete a group permanently
+ */
+const deleteGroup = async (req, res, next) => {
+  try {
+    const groupId = req.params.id;
+
+    // Verify group and membership
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      include: { members: true },
+    });
+
+    if (!group) throw new AppError('Group not found.', 404);
+
+    const membership = group.members.find((m) => m.userId === req.user.userId);
+    if (!membership) throw new AppError('Access denied.', 403);
+    if (membership.role !== 'admin') throw new AppError('Only group admins can delete the group.', 403);
+
+    // Prisma onDelete: Cascade will handle Expense, ExpenseShare, ItemShare, ExpenseItem, GroupMember, Debt, Message, and Settlement
+    await prisma.group.delete({
+      where: { id: groupId },
+    });
+
+    res.json({ message: 'Group deleted permanently.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { createGroup, getGroups, getGroupById, addMember, updateMemberDiet, deleteGroup };

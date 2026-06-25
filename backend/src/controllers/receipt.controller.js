@@ -10,10 +10,10 @@ const uploadReceipt = async (req, res, next) => {
   try {
     if (!req.file) throw new AppError('No image file uploaded.', 400);
 
-    const { items, rawText } = await parseReceiptImage(req.file.path);
+    const { items, tax, tip, rawText } = await parseReceiptImage(req.file.path);
     const receiptUrl = `/uploads/${req.file.filename}`;
 
-    res.json({ items, receiptUrl, rawText: rawText.substring(0, 500) });
+    res.json({ items, tax, tip, receiptUrl, rawText: rawText.substring(0, 500) });
   } catch (error) {
     next(error);
   }
@@ -24,7 +24,7 @@ const uploadReceipt = async (req, res, next) => {
  */
 const confirmReceipt = async (req, res, next) => {
   try {
-    const { groupId, description, items, tax, tip, receiptUrl, memberDiets } = req.body;
+    const { groupId, description, items, tax, tip, roundOff, receiptUrl, memberDiets } = req.body;
 
     if (!groupId || !items?.length) {
       throw new AppError('Group ID and items are required.', 400);
@@ -46,13 +46,14 @@ const confirmReceipt = async (req, res, next) => {
 
     // Calculate subtotal
     const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const totalAmount = subtotal + (tax || 0) + (tip || 0);
+    const totalAmount = subtotal + (tax || 0) + (tip || 0) + (roundOff || 0);
 
     // Calculate proportional shares
     const shares = calculateItemizedShares(
       items,
       tax || 0,
       tip || 0,
+      roundOff || 0,
       memberIds,
       memberDietsMap
     );
@@ -115,4 +116,32 @@ const confirmReceipt = async (req, res, next) => {
   }
 };
 
-module.exports = { uploadReceipt, confirmReceipt };
+/**
+ * DELETE /api/receipts/expense/:id — Delete an expense
+ */
+const deleteExpense = async (req, res, next) => {
+  try {
+    const expenseId = req.params.id;
+
+    // Verify expense exists and user is the payer
+    const expense = await prisma.expense.findUnique({
+      where: { id: expenseId },
+    });
+
+    if (!expense) throw new AppError('Expense not found.', 404);
+    if (expense.payerId !== req.user.userId) {
+      throw new AppError('Only the person who paid the expense can delete it.', 403);
+    }
+
+    // Delete expense (cascade handles expense items and shares)
+    await prisma.expense.delete({
+      where: { id: expenseId },
+    });
+
+    res.json({ message: 'Expense deleted successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { uploadReceipt, confirmReceipt, deleteExpense };

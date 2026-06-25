@@ -38,6 +38,8 @@ const simplifyDebts = (transactions) => {
     const debtor = balances[0];
     const creditor = balances[balances.length - 1];
 
+    if (!debtor || !creditor) break;
+
     // Base case: all settled
     if (Math.abs(debtor.balance) < 0.01 && Math.abs(creditor.balance) < 0.01) break;
 

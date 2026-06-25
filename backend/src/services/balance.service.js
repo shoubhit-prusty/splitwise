@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const { simplifyDebts } = require('../utils/simplifyDebts.util');
 
 /**
  * Calculate the balance for a specific user within a group.
@@ -6,29 +7,47 @@ const prisma = require('../lib/prisma');
  */
 const calculateGroupBalances = async (groupId, userId) => {
   const shares = await prisma.expenseShare.findMany({
-    where: { expense: { groupId }, settled: false },
-    include: { expense: { select: { payerId: true, description: true } }, user: { select: { id: true, name: true } } },
+    where: { expense: { groupId } },
+    include: { expense: { select: { payerId: true } } },
   });
 
+  const settlements = await prisma.settlement.findMany({
+    where: { groupId, status: 'APPROVED' },
+  });
+
+  const transactions = [];
+
+  // Expenses create debt FROM the person who owes TO the person who paid
+  shares.forEach((share) => {
+    transactions.push({
+      fromUserId: share.userId,
+      toUserId: share.expense.payerId,
+      amount: parseFloat(share.amount),
+    });
+  });
+
+  // Settlements reverse debt. If A pays B, B receives the money, meaning B owes A for that amount (mathematically reducing A's debt to B).
+  settlements.forEach((settlement) => {
+    transactions.push({
+      fromUserId: settlement.receiverId,
+      toUserId: settlement.payerId,
+      amount: parseFloat(settlement.amount),
+    });
+  });
+
+  const simplified = simplifyDebts(transactions);
+
+  const breakdown = {};
   let youAreOwed = 0;
   let youOwe = 0;
-  const breakdown = {};
 
-  for (const share of shares) {
-    const amount = parseFloat(share.amount);
-    const payerId = share.expense.payerId;
-    const shareUserId = share.userId;
-
-    // If current user paid and someone else owes
-    if (payerId === userId && shareUserId !== userId) {
-      youAreOwed += amount;
-      breakdown[shareUserId] = (breakdown[shareUserId] || 0) + amount;
-    }
-
-    // If current user owes someone else
-    if (shareUserId === userId && payerId !== userId) {
-      youOwe += amount;
-      breakdown[payerId] = (breakdown[payerId] || 0) - amount;
+  for (const t of simplified) {
+    if (t.from === userId) {
+      youOwe += t.amount;
+      breakdown[t.to] = -t.amount;
+    } else if (t.to === userId) {
+      youAreOwed += t.amount;
+      breakdown[t.from] = t.amount;
     }
   }
 

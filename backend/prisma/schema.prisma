@@ -13,6 +13,7 @@ model User {
   phone        String?  @unique
   passwordHash String
   avatarColor  String   @default("#6366f1")
+  upiId        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -20,9 +21,13 @@ model User {
   paidExpenses  Expense[]      @relation("Payer")
   expenseShares ExpenseShare[]
   itemShares    ItemShare[]
-  sentDebts     Debt[]         @relation("Debtor")
-  receivedDebts Debt[]         @relation("Creditor")
-  settlements   Settlement[]
+  sentDebts           Debt[]         @relation("Debtor")
+  receivedDebts       Debt[]         @relation("Creditor")
+  sentSettlements     Settlement[]   @relation("Payer")
+  receivedSettlements Settlement[]   @relation("Receiver")
+  messages            Message[]
+  paidSubscriptions   Subscription[] @relation("Payer")
+  subscriptionShares  SubscriptionShare[]
 }
 
 model Group {
@@ -33,17 +38,22 @@ model Group {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  members  GroupMember[]
-  expenses Expense[]
-  debts    Debt[]
+  members      GroupMember[]
+  expenses     Expense[]
+  debts        Debt[]
+  messages     Message[]
+  subscriptions Subscription[]
+  settlements Settlement[]
 }
 
 model GroupMember {
   id       String @id @default(uuid())
   userId   String
   groupId  String
-  role     String @default("member") // "admin" | "member"
-  dietType String @default("everything") // "veg" | "everything"
+  role       String   @default("member") // "admin" | "member"
+  dietType   String   @default("everything") // "veg" | "everything"
+  trustScore Int      @default(500)
+  badges     String[] @default([])
 
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
   group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
@@ -127,7 +137,56 @@ model Settlement {
   receiverId String
   amount     Decimal  @db.Decimal(10, 2)
   note       String?
+  proofUrl   String?
+  status     String   @default("PENDING") // "PENDING" | "APPROVED"
   createdAt  DateTime @default(now())
 
-  payer User @relation(fields: [payerId], references: [id])
+  group    Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payer    User @relation("Payer", fields: [payerId], references: [id])
+  receiver User @relation("Receiver", fields: [receiverId], references: [id])
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  groupId    String
+  userId     String
+  text       String
+  isDeleted  Boolean  @default(false)
+  isEdited   Boolean  @default(false)
+  deletedFor String[] @default([])
+  seenBy     String[] @default([])
+  createdAt  DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Subscription {
+  id              String   @id @default(uuid())
+  groupId         String
+  payerId         String
+  name            String
+  amount          Decimal  @db.Decimal(10, 2)
+  cycle           String   // "WEEKLY", "MONTHLY", "YEARLY", "DAYS"
+  intervalCount   Int      @default(1)
+  nextBillingDate DateTime
+  splitType       String   @default("equal") // "equal", "exact", "percentage"
+  status          String   @default("ACTIVE") // "ACTIVE", "PAUSED"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  group  Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  payer  User  @relation("Payer", fields: [payerId], references: [id])
+  shares SubscriptionShare[]
+}
+
+model SubscriptionShare {
+  id             String  @id @default(uuid())
+  subscriptionId String
+  userId         String
+  amount         Decimal? @db.Decimal(10, 2)
+  percentage     Decimal? @db.Decimal(5, 2)
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id])
 }
