@@ -74,3 +74,6 @@ FRONTEND_URL="http://localhost:5173"
 - 📷 **Receipt Scanner** — Upload receipt image → OCR extracts items → tag veg/non-veg → proportional tax split
 - 🧮 **Debt Simplification** — Greedy algorithm minimizes total payment transactions
 - 🍃 **Diet Filtering** — Veg-only members excluded from non-veg item calculations automatically
+- 🎮 **Gamification & Trust Scores** — Earn points and badges like "Speed Demon" for paying debts quickly within 1 hour!
+- 🔄 **Auto-Pay Subscriptions** — Split repeating bills (Netflix, Wi-Fi) with custom intervals (e.g., Every 3 Months)
+- 🧾 **Settlement & Proofs** — Mark debts as paid by uploading screenshot proofs, or bypass with cash, with full UI approval flows
